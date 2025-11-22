@@ -3,7 +3,7 @@ package com.example.neuroshelf.camara.Analyzer
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import com.example.neuroshelf.camara.utils.CameraUtils
+import com.example.neuroshelf.camara.CameraUtils   // ✅ CORREGIDO
 import com.example.neuroshelf.domain.DetectionManager
 import kotlin.system.measureTimeMillis
 
@@ -16,11 +16,11 @@ class FrameAnalyzer(
         try {
             val bitmap = CameraUtils.imageProxyToBitmap(imageProxy)
 
-            bitmap?.let {
-                val processingTime = measureTimeMillis {
-                    detectionManager.processFrame(it)
+            if (bitmap != null) {
+                val time = measureTimeMillis {
+                    detectionManager.processFrame(bitmap)
                 }
-                println("⏱ Frame processed in $processingTime ms")
+                println("⏱ Frame processed in $time ms")
             }
 
         } catch (e: Exception) {

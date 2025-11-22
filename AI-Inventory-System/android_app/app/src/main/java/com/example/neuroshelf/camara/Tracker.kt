@@ -11,6 +11,7 @@ data class DetectionResult(
     val classId: Int
 )
 
+
 // 🔹 Clase de seguimiento (Track)
 data class Track(
     val id: Int,
@@ -103,3 +104,4 @@ class Tracker {
         return hypot((cx1 - cx2), (cy1 - cy2)).toDouble()
     }
 }
+

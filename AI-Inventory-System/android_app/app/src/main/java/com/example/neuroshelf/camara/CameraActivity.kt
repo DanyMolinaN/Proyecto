@@ -17,6 +17,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.neuroshelf.camara.Analyzer.FrameAnalyzer
 import com.example.neuroshelf.domain.DetectionManager
+import com.example.neuroshelf.domain.event.InMemoryEventRepository   // ✅ IMPORT CORRECTO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,11 +28,11 @@ class CameraActivity : ComponentActivity() {
     private lateinit var detectionManager: DetectionManager
     private lateinit var previewView: PreviewView
 
-    // 🔹 Scope de corrutinas dedicadas a procesamiento IA
+    // Scope para IA
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    // 🔹 Implementación válida del repositorio de eventos
-    private val eventRepository = InMemoryEventRepository() // ⚠️ Puedes reemplazar luego por Room o Firebase
+    // Repositorio de eventos en memoria
+    private val eventRepository = InMemoryEventRepository()  // ✅ Ahora existe e importa bien
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -42,7 +43,6 @@ class CameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inicializamos DetectionManager correctamente
         detectionManager = DetectionManager(
             context = this,
             externalScope = externalScope,
@@ -73,7 +73,9 @@ class CameraActivity : ComponentActivity() {
 
             val preview = Preview.Builder()
                 .build()
-                .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                .also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
 
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -89,7 +91,7 @@ class CameraActivity : ComponentActivity() {
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
-                    this, // Ya no requiere cast
+                    this,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
                     imageAnalyzer
@@ -97,6 +99,7 @@ class CameraActivity : ComponentActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+
         }, ContextCompat.getMainExecutor(this))
     }
 
