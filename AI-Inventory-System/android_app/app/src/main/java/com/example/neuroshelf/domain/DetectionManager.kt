@@ -5,34 +5,81 @@ import android.graphics.Bitmap
 import com.example.neuroshelf.camara.Detector
 import com.example.neuroshelf.camara.Tracker
 import com.example.neuroshelf.data.db.entities.Event
+import com.example.neuroshelf.domain.event.EventRepository
+import com.example.neuroshelf.domain.face.FaceRecognition
+import com.example.neuroshelf.domain.face.FaceDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class DetectionManager(private val context: Context) {
-    private val detector = Detector(context, "yolov8n_int8.tflite")
-    private val tracker = Tracker()
-    private val faceRecognition = FaceRecognition(context, "facenet_int8.tflite")
+class DetectionManager(
+    private val context: Context,
+    private val externalScope: CoroutineScope,
+    private val eventRepository: EventRepository
+) {
 
-    // repository injection recommended
+    private val detector: Detector by lazy { Detector(context) }
+    private val tracker: Tracker by lazy { Tracker() }
+    private val faceRecognition: FaceRecognition by lazy { FaceRecognition(context) }
+    private val faceDetector: FaceDetector by lazy { FaceDetector(context) }
+
     fun processFrame(bitmap: Bitmap) {
-        CoroutineScope(Dispatchers.Default).launch {
+        externalScope.launch(Dispatchers.Default) {
+
+            // 1. Detecciones + Tracks
             val detections = detector.detect(bitmap)
             val tracks = tracker.update(detections)
 
-            // For each detection, if class corresponds to product, check person proximity etc.
-            // For demo: detect faces in ROI and compute embedding
-            // NOTE: implement face detection (SSD) to get face boxes -> crop -> embedding
-            // This example assumes face detection returns a faceBitmap.
+            // 2. Reconocimiento facial (si hay personas)
+            val employeeId = identifyEmployeeIfPersonDetected(bitmap, detections)
 
-            // Pseudocode: detect faces
-            // val faces = ssdFaceDetector.detect(bitmap)
-            // for face in faces: emb = faceRecognition.getEmbedding(faceBitmap)
-            // compare with DB embeddings -> get employeeId
+            // 3. Crear eventos
+            createAndSaveEvents(tracks, employeeId)
+        }
+    }
 
-            // Event creation example:
-            // val event = Event(employeeId = foundEmployee, productId = productId, action="TAKE", timestamp=System.currentTimeMillis(), cameraId="CAM01", suspicionScore=0.1f)
-            // save to DB via repository
+    private fun identifyEmployeeIfPersonDetected(
+        bitmap: Bitmap,
+        detections: List<Detector.Detection>
+    ): String? {
+
+        val foundPerson = detections.any { it.classId == 0 } // YOLO class 0 = person
+        if (!foundPerson) return null
+
+        val faces = faceDetector.detectFaces(bitmap)
+        if (faces.isEmpty()) return null
+
+        for (faceBmp in faces) {
+            val emb = faceRecognition.getEmbedding(faceBmp)
+            val id = faceRecognition.identifyPerson(emb)
+            if (id != null) return id
+        }
+        return null
+    }
+
+    private suspend fun createAndSaveEvents(
+        tracks: List<Tracker.Track>,
+        employeeId: String?
+    ) {
+        if (employeeId == null) return
+
+        for (track in tracks) {
+
+            // ❗ IMPORTANTE: aquí decides cuándo es un producto
+            // Necesitas un classId en el Track, o un mapa de IDs → categorías guardado en detector.
+            // Por ahora asumimos que track.id >= 100 son productos.
+            if (track.id >= 100) {
+                val event = Event(
+                    employeeId = employeeId,
+                    productId = track.id.toString(),
+                    action = "PICK_UP",
+                    timestamp = System.currentTimeMillis(),
+                    cameraId = "CAM01",
+                    suspicionScore = 0.1f
+                )
+
+                eventRepository.saveEvent(event) // ✔️ ahora NO da error
+            }
         }
     }
 }

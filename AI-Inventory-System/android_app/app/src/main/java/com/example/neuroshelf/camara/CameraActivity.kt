@@ -8,66 +8,101 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.neuroshelf.camara.Analyzer.FrameAnalyzer
 import com.example.neuroshelf.domain.DetectionManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class CameraActivity : ComponentActivity() {
+
     private val requiredPermissions = arrayOf(Manifest.permission.CAMERA)
-
     private lateinit var detectionManager: DetectionManager
+    private lateinit var previewView: PreviewView
 
-    private val activityResultLauncher =
+    // 🔹 Scope de corrutinas dedicadas a procesamiento IA
+    private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // 🔹 Implementación válida del repositorio de eventos
+    private val eventRepository = InMemoryEventRepository() // ⚠️ Puedes reemplazar luego por Room o Firebase
+
+    private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            var permissionGranted = true
-            permissions.entries.forEach { 
-                if (it.key in requiredPermissions && !it.value) permissionGranted = false
-            }
-            if (!permissionGranted) {
-                finish()
-            } else {
-                startCamera()
-            }
+            if (permissions.entries.all { it.value }) startCamera()
+            else finish()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        detectionManager = DetectionManager()
 
-        if (allPermissionsGranted()) startCamera() else activityResultLauncher.launch(requiredPermissions)
+        // Inicializamos DetectionManager correctamente
+        detectionManager = DetectionManager(
+            context = this,
+            externalScope = externalScope,
+            eventRepository = eventRepository
+        )
 
         setContent {
-            // Jetpack Compose UI: preview + overlays would go here
-            // For brevity not included; focus is on CameraX pipeline.
+            AndroidView(
+                factory = { context ->
+                    previewView = PreviewView(context).apply {
+                        scaleType = PreviewView.ScaleType.FILL_CENTER
+                    }
+                    previewView
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
+
+        if (allPermissionsGranted()) startCamera()
+        else permissionLauncher.launch(requiredPermissions)
     }
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            val previewUseCase = androidx.camera.core.Preview.Builder().build()
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            val preview = Preview.Builder()
+                .build()
+                .also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
-            // Analyzer
             val imageAnalyzer = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetRotation(previewView.display.rotation)
                 .build()
-
-            val frameAnalyzer = FrameAnalyzer(detectionManager)
-            imageAnalyzer.setAnalyzer(ContextCompat.getMainExecutor(this), frameAnalyzer)
+                .apply {
+                    setAnalyzer(
+                        ContextCompat.getMainExecutor(this@CameraActivity),
+                        FrameAnalyzer(detectionManager)
+                    )
+                }
 
             try {
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(this, cameraSelector, previewUseCase, imageAnalyzer)
+                cameraProvider.bindToLifecycle(
+                    this, // Ya no requiere cast
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageAnalyzer
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun allPermissionsGranted() =
-        requiredPermissions.all { ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED }
+    private fun allPermissionsGranted(): Boolean =
+        requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) ==
+                    PackageManager.PERMISSION_GRANTED
+        }
 }

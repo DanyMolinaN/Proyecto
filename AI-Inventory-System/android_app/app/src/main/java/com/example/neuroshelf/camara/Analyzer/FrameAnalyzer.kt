@@ -1,25 +1,32 @@
 package com.example.neuroshelf.camara.Analyzer
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import com.example.neuroshelf.camara.utils.CameraUtils
 import com.example.neuroshelf.domain.DetectionManager
-import java.util.concurrent.TimeUnit
 import kotlin.system.measureTimeMillis
 
-class FrameAnalyzer(private val detectionManager: DetectionManager) : ImageAnalysis.Analyzer {
+class FrameAnalyzer(
+    private val detectionManager: DetectionManager
+) : ImageAnalysis.Analyzer {
 
-
-    @SuppressLint("UnsafeExperimentalUsageError")
+    @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
-        // Convert ImageProxy to Bitmap (helper)
-        val bmp = CameraUtils.imageProxyToBitmap(imageProxy)
-        if (bmp != null) {
-            val t = measureTimeMillis {
-                detectionManager.processFrame(bmp)
+        try {
+            val bitmap = CameraUtils.imageProxyToBitmap(imageProxy)
+
+            bitmap?.let {
+                val processingTime = measureTimeMillis {
+                    detectionManager.processFrame(it)
+                }
+                println("⏱ Frame processed in $processingTime ms")
             }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            imageProxy.close()
         }
-        imageProxy.close()
     }
 }
