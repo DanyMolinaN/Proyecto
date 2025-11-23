@@ -4,14 +4,6 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
-// 🔹 Asegurarse que DetectionResult coincide con el Detector
-data class DetectionResult(
-    val bbox: FloatArray, // [left, top, right, bottom]
-    val score: Float,
-    val classId: Int
-)
-
-
 // 🔹 Clase de seguimiento (Track)
 data class Track(
     val id: Int,

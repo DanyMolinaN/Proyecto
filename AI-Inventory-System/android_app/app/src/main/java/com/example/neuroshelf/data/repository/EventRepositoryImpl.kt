@@ -9,10 +9,10 @@ class EventRepositoryImpl(
 ) : EventRepository {
 
     override suspend fun saveEvent(event: Event) {
-        eventDao.insert(event)
+        eventDao.insertEvent(event)
     }
 
     override suspend fun getAllEvents(): List<Event> {
-        return eventDao.getAll()
+        return eventDao.getAllEvents()
     }
 }

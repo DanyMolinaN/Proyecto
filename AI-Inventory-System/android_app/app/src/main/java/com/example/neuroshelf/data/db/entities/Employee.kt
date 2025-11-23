@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "employees")
 data class Employee(
-    @PrimaryKey val id: String,
+    @PrimaryKey val employeeID: String,
     val name: String,
     val embeddingJson: String // serializar FloatArray a JSON o Base64
 )
