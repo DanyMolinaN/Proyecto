@@ -1,0 +1,15 @@
+ultralytics
+onnx
+onnxruntime
+tensorflow==2.15.0
+numpy>=1.24
+pillow
+opencv-python
+facenet-pytorch
+fastapi
+uvicorn
+gunicorn
+pydantic
+torch
+torchvision
+tqdm
