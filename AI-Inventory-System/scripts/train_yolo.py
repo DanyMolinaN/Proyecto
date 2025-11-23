@@ -1,12 +1,25 @@
 # scripts/train_yolo.py
 from ultralytics import YOLO
 
-# Configura rutas dataset en formato YOLO (images, labels) y datos YAML
-# data.yaml ejemplo:
-# train: ../dataset/images/train
-# val: ../dataset/images/val
-# names: ['product1', 'product2', ...]
+def main():
+    # Carga pesos base (yolov8n es el más rápido)
+    model = YOLO("yolov8n.pt")
 
-model = YOLO('yolov8n.pt')  # base weights; también puedes iniciar desde yolov8n.yaml
-model.train(data='data.yaml', epochs=100, imgsz=640, batch=16, imgsz_t=640)
-# El mejor .pt quedará en runs/train/exp...
+    # Entrenamiento
+    model.train(
+        data="data.yaml",      # Ruta al archivo de configuración del dataset
+        epochs=100,
+        imgsz=640,
+        batch=16,
+        workers=4,
+        device="cpu",              # GPU = 0, CPU = "cpu"
+        patience=20,           # Early stopping
+        cos_lr=True,           # Cosine learning rate
+        pretrained=True
+    )
+
+    print("Entrenamiento terminado. Revisa 'runs/detect/train/' para los resultados.")
+
+
+if __name__ == "__main__":
+    main()
