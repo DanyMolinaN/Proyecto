@@ -7,7 +7,7 @@ def main():
 
     # Entrenamiento
     model.train(
-        data="./AI-Inventory-System/data.yaml",      # Ruta al archivo de configuración del dataset
+        data="./data.yaml",      # Ruta al archivo de configuración del dataset
         epochs=100,
         imgsz=640,
         batch=16,
