@@ -12,7 +12,7 @@ mtcnn = MTCNN(image_size=160, margin=20, device=device)
 model = InceptionResnetV1(pretrained="vggface2").eval().to(device)
 
 # Directorio de dataset
-DATASET_DIR = "dataset/faces"   # personas -> imagenes
+DATASET_DIR = "AI-Inventory-System/dataset/faces"   # personas -> imagenes
 OUTPUT_JSON = "face_embeddings.json"
 
 # Función para procesar una imagen
