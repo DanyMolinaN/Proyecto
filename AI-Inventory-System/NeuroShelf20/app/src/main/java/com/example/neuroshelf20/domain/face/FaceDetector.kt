@@ -2,7 +2,6 @@ package com.example.neuroshelf20.domain.face
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Log
 import com.google.mlkit.vision.common.InputImage
@@ -11,52 +10,36 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.tasks.await
 
-class FaceDetector(private val context: Context) {
+class FaceDetector(context: Context) {
 
-    // Configuración REAL de ML Kit
-    private val detectorOptions = FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-        .enableTracking()
-        .build()
+    private val detector = FaceDetection.getClient(
+        FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .enableTracking()
+            .build()
+    )
 
-    private val detector = FaceDetection.getClient(detectorOptions)
-
-    /**
-     * Detectar rostros en un bitmap
-     */
     suspend fun detectFaces(bitmap: Bitmap): List<Face> {
         return try {
-            val image = InputImage.fromBitmap(bitmap, 0)
-            detector.process(image).await()
+            detector.process(InputImage.fromBitmap(bitmap, 0)).await()
         } catch (e: Exception) {
-            Log.e("FaceDetector", "Error detectando rostros", e)
+            Log.e("FACE_DETECTOR", "❌ Error detectando rostros", e)
             emptyList()
         }
     }
 
-    /**
-     * Recortar rostro desde un rectángulo detectado
-     */
-    fun cropFace(source: Bitmap, box: Rect): Bitmap? {
+    fun cropFace(src: Bitmap, box: Rect): Bitmap? {
+        val rect = Rect(
+            box.left.coerceAtLeast(0),
+            box.top.coerceAtLeast(0),
+            box.right.coerceAtMost(src.width),
+            box.bottom.coerceAtMost(src.height)
+        )
+
         return try {
-            val safeRect = Rect(
-                box.left.coerceAtLeast(0),
-                box.top.coerceAtLeast(0),
-                box.right.coerceAtMost(source.width),
-                box.bottom.coerceAtMost(source.height)
-            )
-
-            if (safeRect.width() <= 0 || safeRect.height() <= 0) return null
-
-            Bitmap.createBitmap(
-                source,
-                safeRect.left,
-                safeRect.top,
-                safeRect.width(),
-                safeRect.height()
-            )
+            Bitmap.createBitmap(src, rect.left, rect.top, rect.width(), rect.height())
         } catch (e: Exception) {
-            Log.e("FaceDetector", "Error recortando rostro", e)
+            Log.e("FACE_DETECTOR", "❌ Error recortando rostro", e)
             null
         }
     }
