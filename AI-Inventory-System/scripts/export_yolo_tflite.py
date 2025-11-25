@@ -1,69 +1,79 @@
-import os
-import tensorflow as tf
 from ultralytics import YOLO
+import tensorflow as tf
+import numpy as np
+import os
 
-def export_yolo_to_tflite():
-
-    # 1) Exportar YOLOv8 → TensorFlow SavedModel
-    model_path = "runs/detect/train4/weights/best.pt"  # Ajusta este path si tu carpeta exp cambió
+def export_yolo_all():
+    model_path = "runs/detect/train/weights/best.pt"
     model = YOLO(model_path)
 
-    print("\n=== EXPORTANDO YOLO a TensorFlow SavedModel ===")
-    model.export(format="tf")   # → genera carpeta: runs/detect/train4/weights/best_saved_model/
-    
-    saved_tf = model.exported_model  # ruta generada por ultralytics
+    print("\n=== EXPORTANDO YOLO a TFLite (FP32, FP16, INT8) ===")
 
-    # 2) Convertir TF → TFLite (FP32)
-    print("\n=== EXPORTANDO TFLite FP32 ===")
+    # ============================================================
+    # 1) EXPORTAR FP32 y FP16 con Ultralytics
+    # ============================================================
+    print("\n➡ Exportando TFLite FP32...")
+    fp32_path = model.export(format="tflite")  # Float32
+    print(f"✔ Modelo FP32 guardado en: {fp32_path}")
 
-    converter = tf.lite.TFLiteConverter.from_saved_model(saved_tf)
-    tflite_fp32 = converter.convert()
+    print("\n➡ Exportando TFLite FP16...")
+    fp16_path = model.export(format="tflite", half=True)
+    print(f"✔ Modelo FP16 guardado en: {fp16_path}")
 
-    os.makedirs("runs/export", exist_ok=True)
-    fp32_path = "runs/export/yolov8_fp32.tflite"
+    # ============================================================
+    # 2) Crear firma en SavedModel para INT8
+    # ============================================================
+    saved_model_dir = "runs/detect/train/weights/best_saved_model"
+    model_tf = tf.saved_model.load(saved_model_dir)
 
-    with open(fp32_path, "wb") as f:
-        f.write(tflite_fp32)
+    @tf.function(input_signature=[tf.TensorSpec(shape=[1, 640, 640, 3], dtype=tf.float32)])
+    def serve_fn(input_tensor):
+        outputs = model_tf(input_tensor)
+        return {"outputs": outputs}
 
-    print(f"Guardado: {fp32_path}")
+    signed_model_dir = "runs/detect/train/weights/best_saved_model_signed"
+    tf.saved_model.save(model_tf, signed_model_dir, signatures={"serving_default": serve_fn})
+    print(f"✔ Nuevo SavedModel con firma guardado en: {signed_model_dir}")
 
-    # 3) Quantize to INT8 with representative dataset
-    print("\n=== GENERANDO TFLite INT8 ===")
+    # ============================================================
+    # 3) Preparar dataset representativo
+    # ============================================================
+    rep_data_dir = "./AI-Inventory-System/dataset/images/representative"
+    rep_imgs = [
+        os.path.join(rep_data_dir, f)
+        for f in os.listdir(rep_data_dir)
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
 
-    def representative_data_gen():
-        img_dir = "dataset/images/representative"
-
-        for fname in os.listdir(img_dir):
-            path = os.path.join(img_dir, fname)
-
-            if not fname.lower().endswith(("jpg", "jpeg", "png", "bmp", "webp")):
-                continue
-
-            img = tf.io.read_file(path)
-            img = tf.image.decode_image(img, channels=3)
-            img = tf.image.resize(img, [640, 640])
-            img = tf.cast(img, tf.uint8)
+    def representative_dataset():
+        for img_path in rep_imgs:
+            img = tf.io.read_file(img_path)
+            img = tf.io.decode_image(img, channels=3)
+            img = tf.image.resize(img, (640, 640))
+            img = tf.cast(img, tf.float32) / 255.0
             img = tf.expand_dims(img, 0)
+            yield [img]
 
-            yield [img.numpy()]
+    print(f"✔ {len(rep_imgs)} imágenes representativas cargadas")
 
-    converter = tf.lite.TFLiteConverter.from_saved_model(saved_tf)
+    # ============================================================
+    # 4) Convertir a INT8
+    # ============================================================
+    print("\n➡ Convirtiendo a TFLite INT8...")
+    converter = tf.lite.TFLiteConverter.from_saved_model(signed_model_dir)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.representative_dataset = representative_data_gen
-
+    converter.representative_dataset = representative_dataset
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.inference_input_type = tf.uint8
     converter.inference_output_type = tf.uint8
 
-    tflite_int8 = converter.convert()
+    int8_tflite = converter.convert()
+    out_path = "runs/detect/train/weights/best_int8.tflite"
+    with open(out_path, "wb") as f:
+        f.write(int8_tflite)
 
-    int8_path = "runs/export/yolov8_int8.tflite"
-
-    with open(int8_path, "wb") as f:
-        f.write(tflite_int8)
-
-    print(f"Guardado: {int8_path}")
+    print(f"✔ Modelo INT8 guardado en: {out_path}")
     print("\n=== EXPORTACIÓN COMPLETA ===")
 
 if __name__ == "__main__":
-    export_yolo_to_tflite()
+    export_yolo_all()
