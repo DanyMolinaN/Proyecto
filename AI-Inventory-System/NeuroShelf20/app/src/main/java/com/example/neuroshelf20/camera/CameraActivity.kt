@@ -11,19 +11,17 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.neuroshelf20.domain.DetectionManager
 import com.example.neuroshelf20.data.repository.EventRepositoryFirebaseImpl
-import com.example.neuroshelf20.data.repository.EmployeeRepositoryFirebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import com.example.neuroshelf20.camera.analyzer.FrameAnalyzer
 
-
 class CameraActivity : ComponentActivity() {
+
     private lateinit var previewView: PreviewView
     private val requiredPermissions = arrayOf(Manifest.permission.CAMERA)
     private val externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -37,15 +35,13 @@ class CameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Repositorios Firebase
+        // SOLO este repositorio porque DetectionManager solo recibe uno
         val eventRepo = EventRepositoryFirebaseImpl()
-        val employeeRepo = EmployeeRepositoryFirebase()
 
         val detectionManager = DetectionManager(
             context = this,
             externalScope = externalScope,
-            eventRepository = eventRepo,
-            employeeRepository = employeeRepo
+            eventRepository = eventRepo
         )
 
         setContent {
@@ -58,16 +54,22 @@ class CameraActivity : ComponentActivity() {
             )
         }
 
-        if (!allPermissionsGranted()) permissionLauncher.launch(requiredPermissions) else startCamera()
+        if (!allPermissionsGranted()) {
+            permissionLauncher.launch(requiredPermissions)
+        } else {
+            startCamera()
+        }
 
-        // Expose detectionManager to analyzer via simple singleton or property
+        // Pasamos el detectionManager al analyzer
         AnalyzerHolder.detectionManager = detectionManager
     }
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
+
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
@@ -76,25 +78,32 @@ class CameraActivity : ComponentActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .also {
-                    it.setAnalyzer(ContextCompat.getMainExecutor(this), FrameAnalyzer(AnalyzerHolder.detectionManager!!))
+                    it.setAnalyzer(
+                        ContextCompat.getMainExecutor(this),
+                        FrameAnalyzer(AnalyzerHolder.detectionManager!!)
+                    )
                 }
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-            try {   
+            try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalyzer)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+
         }, ContextCompat.getMainExecutor(this))
     }
 
     private fun allPermissionsGranted(): Boolean =
-        requiredPermissions.all { ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED }
+        requiredPermissions.all {
+            ContextCompat.checkSelfPermission(baseContext, it) ==
+                    PackageManager.PERMISSION_GRANTED
+        }
 }
 
-// small holder to pass detectionManager to analyzer
+// Holder para pasar DetectionManager al FrameAnalyzer
 object AnalyzerHolder {
     var detectionManager: DetectionManager? = null
 }

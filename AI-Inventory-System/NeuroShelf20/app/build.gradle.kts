@@ -96,8 +96,8 @@ dependencies {
     implementation("com.google.guava:guava:31.1-android")
 
 
-    implementation("com.google.mediapipe:tasks-vision:0.10.14")
-    implementation("com.google.mediapipe:framework:0.10.14")
+    //implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    //implementation("com.google.mediapipe:framework:0.10.14")
 
     implementation("com.google.mlkit:face-detection:16.1.7")
 

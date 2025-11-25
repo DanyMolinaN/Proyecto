@@ -2,81 +2,75 @@ package com.example.neuroshelf20.domain
 
 import android.content.Context
 import android.graphics.Bitmap
-import com.example.neuroshelf20.camara.Detector
-import com.example.neuroshelf20.camara.Tracker
-import com.example.neuroshelf20.data.model.EventModel
-import com.example.neuroshelf20.data.repository.EmployeeRepositoryFirebase
+import android.util.Log
 import com.example.neuroshelf20.domain.face.FaceDetector
 import com.example.neuroshelf20.domain.face.FaceRecognition
-import com.example.neuroshelf20.domain.event.EventRepository
-
+import com.example.neuroshelf20.data.repository.EventRepositoryFirebaseImpl
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import  com.example.neuroshelf20.data.model.EventModel
 
 class DetectionManager(
     private val context: Context,
     private val externalScope: CoroutineScope,
-    private val eventRepository: EventRepository,
-    private val employeeRepository: EmployeeRepositoryFirebase
+    private val eventRepository: EventRepositoryFirebaseImpl
 ) {
 
-    private val detector by lazy { Detector(context) }
-    private val tracker by lazy { Tracker() }
-    private val faceDetector by lazy { FaceDetector(context) }
-    private val faceRecognition by lazy { FaceRecognition(context) }
-    private val alertManager by lazy { AlertManager(context) }
-    private val PRODUCT_CLASSES = listOf(39, 41, 75, 76)
-    fun processFrame(bitmap: Bitmap) {
-        externalScope.launch {
-            try {
-                val detections = detector.detect(bitmap)
-                val tracks = tracker.update(detections)
+    private val faceDetector = FaceDetector(context)
+    private val faceRecognition = FaceRecognition(context)
+    private val alertManager = AlertManager(context)
 
-                // If there's a person class (classId 0 usualy), try find face
-                val hasPerson = detections.any { it.classId == 0 } // adjust classId mapping as required
-                var employeeId: String? = null
-                if (hasPerson) {
-                    val faces = faceDetector.detectFaces(bitmap)
-                    val embeddingsDB = employeeRepository.getAllEmbeddings()
-                    for (faceBmp in faces) {
-                        val emb = faceRecognition.getEmbedding(faceBmp)
-                        val match = embeddingsDB.minByOrNull { (_, dbVec) ->
-                            FaceRecognition.cosineDistance(emb, dbVec)
-                        }
-                        if (match != null && FaceRecognition.cosineDistance(emb, match.second) < 0.45f) {
-                            employeeId = match.first
-                            break
-                        }
-                    }
+    fun processFrame(bitmap: Bitmap) {
+        externalScope.launch(Dispatchers.Default) {
+
+            val faces = faceDetector.detectFaces(bitmap)
+
+            if (faces.isEmpty()) {
+                Log.d("DETECT", "No se detectaron rostros")
+                return@launch
+            }
+
+            for (face in faces) {
+
+                val box = face.boundingBox
+                val cropped = faceDetector.cropFace(bitmap, box)
+
+                if (cropped == null) {
+                    Log.e("DETECT", "No se pudo recortar rostro")
+                    continue
                 }
 
-                handleEvents(tracks, employeeId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
+                // Convertir imagen en firma (embedding simple)
+                val signature = faceRecognition.extractSignature(cropped)
 
+                // Buscar persona en el JSON
+                val personId = faceRecognition.matchSignature(signature)
 
-    private suspend fun handleEvents(tracks: List<com.example.neuroshelf20.camara.Track>, employeeId: String?) {
-        if (employeeId == null) {
-            // optional: send alert only if suspicious removal occurs
-            alertManager.sendLocalAlert("Persona no identificada", "Interacción detectada sin identificación")
-        }
-        for (t in tracks) {
-            // if a product class - adapt classId mapping
-            if (t.classId != 0) {
-                val event = EventModel(
-                    id = "",
-                    employeeId = employeeId,
-                    productId = t.id.toString(),
-                    action = "PICK_UP",
-                    timestamp = System.currentTimeMillis(),
-                    cameraId = "CAM01",
-                    suspicionScore = 0.1
-                )
-                eventRepository.saveEvent(event)
+                if (personId != null) {
+
+                    alertManager.sendLocalAlert(
+                        "Identificado",
+                        "Empleado: $personId"
+                    )
+
+                    val event = EventModel(
+                        employeeId = personId,
+                        productId = null,
+                        action = "face_recognized",
+                        timestamp = System.currentTimeMillis(),
+                        cameraId = "CAMERA01",
+                        suspicionScore = 0.0
+                    )
+
+                    eventRepository.saveEvent(event)
+
+                } else {
+                    alertManager.sendLocalAlert(
+                        "Alerta",
+                        "Persona NO registrada"
+                    )
+                }
             }
         }
     }
