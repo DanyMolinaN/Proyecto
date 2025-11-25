@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1041626831608",
+    "project_id": "inventarionsh",
+    "storage_bucket": "inventarionsh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041626831608:android:66644d9e081e207c61f90d",
+        "android_client_info": {
+          "package_name": "com.example.neuroshelf20"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMMk6UsFXcDVfyAD5kkRZxjki_XXT3E2k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
