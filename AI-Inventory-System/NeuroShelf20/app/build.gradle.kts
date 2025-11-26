@@ -95,6 +95,9 @@ dependencies {
 
     implementation("com.google.guava:guava:31.1-android")
 
+    //Pytorch
+    implementation("org.pytorch:pytorch_android:1.13.1")
+    implementation("org.pytorch:pytorch_android_torchvision:1.13.1")
 
     //implementation("com.google.mediapipe:tasks-vision:0.10.14")
     //implementation("com.google.mediapipe:framework:0.10.14")
